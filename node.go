@@ -1,4 +1,4 @@
-package main
+package gopeers
 
 import (
 	"code.google.com/p/go-uuid/uuid"
