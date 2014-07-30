@@ -53,11 +53,11 @@ type FrameConnection struct {
 	requests            map[uint32]pendingRequest
 
 	// Handlers for various events
-	onNotification      func([]byte)
-	onRequest           func([]byte) []byte
-	onOpenReadChannel   func([]byte, chan []byte)
-	onOpenWriteChannel  func([]byte, chan []byte)
-	onDisconnect        func()
+	OnNotification      func([]byte)
+	OnRequest           func([]byte) []byte
+	OnOpenReadChannel   func([]byte, chan []byte)
+	OnOpenWriteChannel  func([]byte, chan []byte)
+	OnDisconnect        func()
 }
 
 
@@ -232,20 +232,20 @@ func (c *FrameConnection) readLoop() {
 
 		switch kind {
 		case notificationFrame:
-			c.onNotification(buffer)
+			c.OnNotification(buffer)
 		case requestFrame:
 			// TODO: run in goroutine
-			resp := c.onRequest(buffer)
+			resp := c.OnRequest(buffer)
 			c.sendResponse(reqId, resp)
 		case openReadChannelFrame:
 			pr := pendingRequest{true, make(chan []byte), nil}
 			c.requests[reqId] = pr
-			go c.onOpenReadChannel(buffer, pr.channel)
+			go c.OnOpenReadChannel(buffer, pr.channel)
 			go c.streamResponse(reqId, pr.channel)
 		case openWriteChannelFrame:
 			pr := pendingRequest{true, make(chan []byte), nil}
 			c.requests[reqId] = pr
-			go c.onOpenWriteChannel(buffer, pr.channel)
+			go c.OnOpenWriteChannel(buffer, pr.channel)
 		case responseFrame, channelDataFrame:
 			if pr, ok := c.requests[reqId]; ok {
 				pr.channel <- buffer
@@ -286,6 +286,6 @@ func (c *FrameConnection) Close() {
 		c.closing = true
 		close(c.writeChannel)
 		c.conn.Close()
-		c.onDisconnect()
+		c.OnDisconnect()
 	}
 }

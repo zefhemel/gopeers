@@ -24,10 +24,10 @@ type MessageConnection struct {
         inverseProtocolMessages map[reflect.Type]messageKind
 
         // handlers
-        onNotificationMessage  func(interface{})
-        onRequestMessage       func(interface{}) (interface{}, error)
-        onOpenReadChannelMessage func(interface{}, chan []byte) error
-        onOpenWriteChannelMessage func(interface{}, chan []byte) error
+        OnNotificationMessage  func(interface{})
+        OnRequestMessage       func(interface{}) (interface{}, error)
+        OnOpenReadChannelMessage func(interface{}, chan []byte) error
+        OnOpenWriteChannelMessage func(interface{}, chan []byte) error
 }
 
 // messageKind = ErrormessageKind
@@ -39,21 +39,21 @@ func NewMessageConnection(conn net.Conn, protocolMessages []interface{}) *Messag
         mc := &MessageConnection {}
         mc.initFrameConnection(conn)
         mc.setProtocolMessages(protocolMessages)
-        mc.onNotification = func(data []byte) {
+        mc.OnNotification = func(data []byte) {
                 val, err := mc.decodeMessage(data)
                 if err != nil {
                         fmt.Println("Couldn't decode message", err)
                         return
                 }
-                mc.onNotificationMessage(val)
+                mc.OnNotificationMessage(val)
         }
-        mc.onRequest = func(data []byte) []byte {
+        mc.OnRequest = func(data []byte) []byte {
                 val, err := mc.decodeMessage(data)
                 if err != nil {
                         fmt.Println("Couldn't decode message", err)
                         return nil
                 }
-                result, err := mc.onRequestMessage(val)
+                result, err := mc.OnRequestMessage(val)
                 if err != nil {
                         result = errorMessage { err.Error() }
                 }
@@ -64,24 +64,24 @@ func NewMessageConnection(conn net.Conn, protocolMessages []interface{}) *Messag
                 }
                 return resultBytes
         }
-        mc.onOpenReadChannel = func(data []byte, channel chan []byte) {
+        mc.OnOpenReadChannel = func(data []byte, channel chan []byte) {
                 val, err := mc.decodeMessage(data)
                 if err != nil {
                         fmt.Println("Couldn't decode message", err)
                         return
                 }
-                err = mc.onOpenReadChannelMessage(val, channel)
+                err = mc.OnOpenReadChannelMessage(val, channel)
                 if err != nil {
                         fmt.Println("Got error from request receive stream", err)
                 }
         }
-        mc.onOpenWriteChannel = func(data []byte, channel chan[] byte) {
+        mc.OnOpenWriteChannel = func(data []byte, channel chan[] byte) {
                 val, err := mc.decodeMessage(data)
                 if err != nil {
                         fmt.Println("Couldn't decode message", err)
                         return
                 }
-                err = mc.onOpenWriteChannelMessage(val, channel)
+                err = mc.OnOpenWriteChannelMessage(val, channel)
                 if err != nil {
                         fmt.Println("Got error from request send stream", err)
                 }

@@ -79,10 +79,10 @@ func (n *Node) initNode(listenIp string) {
 
 
 func (n *Node) initMessageConnection(c *MessageConnection) {
-	c.onNotificationMessage = func(message interface{}) {
+	c.OnNotificationMessage = func(message interface{}) {
 		n.handlerDelegate.Notification(c, message)
 	}
-	c.onRequestMessage = func(message interface{}) (interface{}, error) {
+	c.OnRequestMessage = func(message interface{}) (interface{}, error) {
 	        // Check if it's a built-in message I should respond to
 	        switch m := message.(type) {
                 case *helloMessage:
@@ -103,13 +103,13 @@ func (n *Node) initMessageConnection(c *MessageConnection) {
 		        return n.handlerDelegate.Request(c, message)
 	        }
 	}
-	c.onOpenReadChannelMessage = func(message interface{}, channel chan []byte) error {
+	c.OnOpenReadChannelMessage = func(message interface{}, channel chan []byte) error {
 		return n.handlerDelegate.OpenReadChannel(c, message, channel)
 	}
-	c.onOpenWriteChannelMessage = func(message interface{}, channel chan []byte) error {
+	c.OnOpenWriteChannelMessage = func(message interface{}, channel chan []byte) error {
 		return n.handlerDelegate.OpenWriteChannel(c, message, channel)
 	}
-	c.onDisconnect = func() {
+	c.OnDisconnect = func() {
 		if c.info.Guid != "" {
 			n.log.Println("Node", c.info.Guid, "disconnected")
 			n.handlerDelegate.Disconnect(c)
