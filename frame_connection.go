@@ -10,48 +10,57 @@ import (
 
 // Frame connection only operates on []byte
 
-type FrameType uint8
+type frameKind uint8
 
 const (
-	NotificationFrame         FrameType = 0
-	RequestFrame              FrameType = 1
-	RequestStreamFrame        FrameType = 2
-	ResponseFrame             FrameType = 3
-	RequestReceiveStreamFrame FrameType = 4
-	RequestSendStreamFrame    FrameType = 5
-	StreamDataFrame           FrameType = 6
-	StreamCloseFrame          FrameType = 7
-	StreamClosedFrame         FrameType = 8
+	notificationFrame      frameKind = 0
+	requestFrame           frameKind = 1
+	requestStreamFrame     frameKind = 2
+	responseFrame          frameKind = 3
+	openReadChannelFrame   frameKind = 4
+	openWriteChannelFrame  frameKind = 5
+	channelDataFrame       frameKind = 6
+	channelCloseFrame      frameKind = 7
+	channelClosedFrame     frameKind = 8
 )
 
+type frame struct {
+    kind       frameKind
+    reqId      uint32
+    data       []byte
+}
+
+type pendingRequest struct {
+    stream  bool
+    channel chan []byte
+    doneChannel chan bool
+}
+
 type FrameConnection struct {
-	info    NodeInfo
-	conn    net.Conn
-	reqId   uint32
-	closing bool
-	// readChannel chan Frame
-	writeChannel chan Frame
-	requests     map[uint32]PendingRequest
+        // The actual socket connection
+	conn                net.Conn
 
-	// handlers
-	onNotification         func([]byte)
-	onRequest              func([]byte) []byte
-	onRequestReceiveStream func([]byte, chan []byte)
-	onRequestSendStream    func([]byte, chan []byte)
-	onDisconnect           func()
+	// Current request Id (starts at 0)
+	reqId               uint32
+
+	// Whether the connection is in currently being closed
+	closing             bool
+
+	// Channel to push frames to be sent on
+	writeChannel        chan frame
+
+	// Pending requests
+	requests            map[uint32]pendingRequest
+
+	// Handlers for various events
+	onNotification      func([]byte)
+	onRequest           func([]byte) []byte
+	onOpenReadChannel   func([]byte, chan []byte)
+	onOpenWriteChannel  func([]byte, chan []byte)
+	onDisconnect        func()
 }
 
-type Frame struct {
-	frameType FrameType
-	reqId       uint32
-	data        []byte
-}
 
-type PendingRequest struct {
-	stream  bool
-	channel chan []byte
-	doneChannel chan bool
-}
 
 func NewFrameConnection(conn net.Conn) *FrameConnection {
 	c := &FrameConnection{}
@@ -62,8 +71,8 @@ func NewFrameConnection(conn net.Conn) *FrameConnection {
 func (c *FrameConnection) initFrameConnection(conn net.Conn) {
         c.reqId = 0
         c.conn = conn
-        c.writeChannel = make(chan Frame)
-        c.requests = make(map[uint32]PendingRequest)
+        c.writeChannel = make(chan frame)
+        c.requests = make(map[uint32]pendingRequest)
 }
 
 func (c *FrameConnection) Loop() {
@@ -74,10 +83,10 @@ func (c *FrameConnection) Loop() {
 
 func (c *FrameConnection) Notify(data []byte) {
 	c.reqId++
-	f := Frame{
-		frameType: NotificationFrame,
-		reqId:     c.reqId,
-		data:      data,
+	f := frame{
+		kind:  notificationFrame,
+		reqId: c.reqId,
+		data:  data,
 	}
 	c.writeChannel <- f
 }
@@ -85,12 +94,12 @@ func (c *FrameConnection) Notify(data []byte) {
 func (c *FrameConnection) Request(data []byte) ([]byte, error) {
 	c.reqId++
 	reqId := c.reqId
-	f := Frame{
-		frameType: RequestFrame,
+	f := frame{
+		kind: requestFrame,
 		reqId:       reqId,
 		data:        data,
 	}
-	pr := PendingRequest{false, make(chan []byte), nil}
+	pr := pendingRequest{false, make(chan []byte), nil}
 	c.requests[reqId] = pr
 	c.writeChannel <- f
 	result, ok := <-pr.channel
@@ -102,27 +111,27 @@ func (c *FrameConnection) Request(data []byte) ([]byte, error) {
 	return result, nil
 }
 
-func (c *FrameConnection) OpenReceiveStream(data []byte) (chan []byte, error) {
+func (c *FrameConnection) OpenReadChannel(data []byte) (chan []byte, error) {
 	c.reqId++
-	f := Frame{
-		frameType: RequestReceiveStreamFrame,
+	f := frame{
+		kind: openReadChannelFrame,
 		reqId:       c.reqId,
 		data:        data,
 	}
-	pr := PendingRequest{true, make(chan []byte), nil}
+	pr := pendingRequest{true, make(chan []byte), nil}
 	c.requests[c.reqId] = pr
 	c.writeChannel <- f
 	return pr.channel, nil
 }
 
-func (c *FrameConnection) OpenSendStream(data []byte) (chan []byte, chan bool, error) {
+func (c *FrameConnection) OpenWriteChannel(data []byte) (chan []byte, chan bool, error) {
 	c.reqId++
-	f := Frame{
-		frameType: RequestSendStreamFrame,
+	f := frame{
+		kind: openWriteChannelFrame,
 		reqId:       c.reqId,
 		data:        data,
 	}
-	pr := PendingRequest{true, make(chan []byte), make(chan bool, 1)}
+	pr := pendingRequest{true, make(chan []byte), make(chan bool, 1)}
 	c.requests[c.reqId] = pr
 	c.writeChannel <- f
 	go c.streamResponse(c.reqId, pr.channel)
@@ -130,8 +139,8 @@ func (c *FrameConnection) OpenSendStream(data []byte) (chan []byte, chan bool, e
 }
 
 func (c *FrameConnection) sendResponse(reqId uint32, data []byte) {
-	f := Frame{
-		frameType: ResponseFrame,
+	f := frame{
+		kind: responseFrame,
 		reqId:       reqId,
 		data:        data,
 	}
@@ -139,16 +148,16 @@ func (c *FrameConnection) sendResponse(reqId uint32, data []byte) {
 }
 func (c *FrameConnection) streamResponse(reqId uint32, channel chan []byte) {
 	for data := range channel {
-		c.writeChannel <- Frame{
-			frameType: StreamDataFrame,
+		c.writeChannel <- frame{
+			kind: channelDataFrame,
 			reqId:       reqId,
 			data:        data,
 		}
 	}
-	c.writeChannel <- Frame{
-		frameType: StreamCloseFrame,
-		reqId:       reqId,
-		data:        []byte{},
+	c.writeChannel <- frame{
+		kind:  channelCloseFrame,
+		reqId: reqId,
+		data:  []byte{},
 	}
 }
 
@@ -159,7 +168,7 @@ func (c *FrameConnection) writeLoop() {
 			c.Close()
 			return
 		}
-		err := binary.Write(c.conn, binary.LittleEndian, f.frameType)
+		err := binary.Write(c.conn, binary.LittleEndian, f.kind)
 		if err != nil {
 			fmt.Println("Write error 1", err)
 			c.Close()
@@ -188,12 +197,12 @@ func (c *FrameConnection) writeLoop() {
 }
 
 func (c *FrameConnection) readLoop() {
-	var frameType FrameType
+	var kind frameKind
 	var reqId uint32
 	var length uint32
 	for {
-		// read FrameType
-		err := binary.Read(c.conn, binary.LittleEndian, &frameType)
+		// read frameKind
+		err := binary.Read(c.conn, binary.LittleEndian, &kind)
 		if err != nil {
 			// fmt.Println("Read error", err.Error())
 			c.Close()
@@ -221,35 +230,35 @@ func (c *FrameConnection) readLoop() {
 			return
 		}
 
-		switch frameType {
-		case NotificationFrame:
+		switch kind {
+		case notificationFrame:
 			c.onNotification(buffer)
-		case RequestFrame:
+		case requestFrame:
 			// TODO: run in goroutine
 			resp := c.onRequest(buffer)
 			c.sendResponse(reqId, resp)
-		case RequestReceiveStreamFrame:
-			pr := PendingRequest{true, make(chan []byte), nil}
+		case openReadChannelFrame:
+			pr := pendingRequest{true, make(chan []byte), nil}
 			c.requests[reqId] = pr
-			go c.onRequestReceiveStream(buffer, pr.channel)
+			go c.onOpenReadChannel(buffer, pr.channel)
 			go c.streamResponse(reqId, pr.channel)
-		case RequestSendStreamFrame:
-			pr := PendingRequest{true, make(chan []byte), nil}
+		case openWriteChannelFrame:
+			pr := pendingRequest{true, make(chan []byte), nil}
 			c.requests[reqId] = pr
-			go c.onRequestSendStream(buffer, pr.channel)
-		case ResponseFrame, StreamDataFrame:
+			go c.onOpenWriteChannel(buffer, pr.channel)
+		case responseFrame, channelDataFrame:
 			if pr, ok := c.requests[reqId]; ok {
 				pr.channel <- buffer
 				// NOTE: Request method closes channel and cleans up
 			} else {
 				fmt.Println("Response to non-existent request id", reqId)
 			}
-		case StreamCloseFrame:
+		case channelCloseFrame:
 			if pr, ok := c.requests[reqId]; ok {
 				close(pr.channel)
 				delete(c.requests, reqId)
-				f := Frame {
-                                    frameType: StreamClosedFrame,
+				f := frame {
+                                    kind: channelClosedFrame,
                                     reqId:       reqId,
                                     data:        []byte{},
                                 }
@@ -257,16 +266,15 @@ func (c *FrameConnection) readLoop() {
 			} else {
 				fmt.Println("Response to non-existent request id", reqId)
 			}
-		case StreamClosedFrame:
+		case channelClosedFrame:
 			if pr, ok := c.requests[reqId]; ok {
 			        pr.doneChannel <- true
-// 				close(pr.channel)
 				delete(c.requests, reqId)
 			} else {
 				fmt.Println("Response to non-existent request id", reqId)
 			}
 		default:
-			fmt.Println("Unkown message type", frameType)
+			fmt.Println("Unkown message type", kind)
 
 		}
 

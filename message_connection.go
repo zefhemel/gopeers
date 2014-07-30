@@ -18,14 +18,16 @@ const ErrorMessageType = 65535
 type MessageConnection struct {
         FrameConnection
 
+        info    NodeInfo
+
         protocolMessages []reflect.Type
         inverseProtocolMessages map[reflect.Type]MessageType
 
         // handlers
         onNotificationMessage  func(interface{})
         onRequestMessage       func(interface{}) (interface{}, error)
-        onRequestReceiveStreamMessage func(interface{}, chan []byte) error
-        onRequestSendStreamMessage func(interface{}, chan []byte) error
+        onOpenReadChannelMessage func(interface{}, chan []byte) error
+        onOpenWriteChannelMessage func(interface{}, chan []byte) error
 }
 
 // messageType = ErrorMessageType
@@ -62,24 +64,24 @@ func NewMessageConnection(conn net.Conn, protocolMessages []interface{}) *Messag
                 }
                 return resultBytes
         }
-        mc.onRequestReceiveStream = func(data []byte, channel chan []byte) {
+        mc.onOpenReadChannel = func(data []byte, channel chan []byte) {
                 val, err := mc.decodeMessage(data)
                 if err != nil {
                         fmt.Println("Couldn't decode message", err)
                         return
                 }
-                err = mc.onRequestReceiveStreamMessage(val, channel)
+                err = mc.onOpenReadChannelMessage(val, channel)
                 if err != nil {
                         fmt.Println("Got error from request receive stream", err)
                 }
         }
-        mc.onRequestSendStream = func(data []byte, channel chan[] byte) {
+        mc.onOpenWriteChannel = func(data []byte, channel chan[] byte) {
                 val, err := mc.decodeMessage(data)
                 if err != nil {
                         fmt.Println("Couldn't decode message", err)
                         return
                 }
-                err = mc.onRequestSendStreamMessage(val, channel)
+                err = mc.onOpenWriteChannelMessage(val, channel)
                 if err != nil {
                         fmt.Println("Got error from request send stream", err)
                 }
@@ -163,20 +165,20 @@ func (mc *MessageConnection) NotifyMessage(message interface{}) error {
         return nil
 }
 
-func (mc *MessageConnection) OpenReceiveStreamMessage(message interface{}) (chan []byte, error) {
+func (mc *MessageConnection) OpenReadChannelMessage(message interface{}) (chan []byte, error) {
         data, err := mc.encodeMessage(message)
         if err != nil {
                 return nil, err
         }
-        return mc.OpenReceiveStream(data)
+        return mc.OpenReadChannel(data)
 }
 
-func (mc *MessageConnection) OpenSendStreamMessage(message interface{}) (chan []byte, chan bool, error) {
+func (mc *MessageConnection) OpenWriteChannelMessage(message interface{}) (chan []byte, chan bool, error) {
         data, err := mc.encodeMessage(message)
         if err != nil {
                 return nil, nil, err
         }
-        return mc.OpenSendStream(data)
+        return mc.OpenWriteChannel(data)
 }
 
 func writeMesssageTypeToBytes(t MessageType, data []byte) {

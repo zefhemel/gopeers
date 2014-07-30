@@ -68,7 +68,7 @@ func (td *testDelegate) Notification(mc *MessageConnection, message interface{})
         fmt.Println("Got a notification", message)
 }
 
-func (td *testDelegate) RequestReceiveStream(vmc *MessageConnection, message interface{}, channel chan []byte) error {
+func (td *testDelegate) OpenReadChannel(vmc *MessageConnection, message interface{}, channel chan []byte) error {
         fmt.Println("Got a request receive stream", message)
         switch message.(type) {
         case *sendSomeBytes:
@@ -81,7 +81,7 @@ func (td *testDelegate) RequestReceiveStream(vmc *MessageConnection, message int
         return nil
 }
 
-func (td *testDelegate) RequestSendStream(mc *MessageConnection, message interface{}, channel chan []byte) error {
+func (td *testDelegate) OpenWriteChannel(mc *MessageConnection, message interface{}, channel chan []byte) error {
         fmt.Println("Got a request send stream", message)
         switch message.(type) {
         case *receiveSomeBytes:
@@ -216,7 +216,7 @@ func TestReceiveStream(t *testing.T) {
 	node1.Connect("", 0)
 	node2 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
 	node2.Connect("127.0.0.1", node1.listenPort)
-	channel, err := node1.connections[node2.guid].OpenReceiveStreamMessage(sendSomeBytes{})
+	channel, err := node1.connections[node2.guid].OpenReadChannelMessage(sendSomeBytes{})
 	if err != nil {
 		t.Error("Got error requesting some bytes", err)
 		return
@@ -231,7 +231,7 @@ func TestSendStream(t *testing.T) {
         node1.Connect("", 0)
         node2 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
         node2.Connect("127.0.0.1", node1.listenPort)
-	channel, doneChannel, err := node1.connections[node2.guid].OpenSendStreamMessage(receiveSomeBytes{})
+	channel, doneChannel, err := node1.connections[node2.guid].OpenWriteChannelMessage(receiveSomeBytes{})
 	if err != nil {
 		t.Error("Got error sending block", err)
 		return

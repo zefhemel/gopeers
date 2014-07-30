@@ -28,8 +28,8 @@ type PeerMessage struct {
 type NodeHandlerDelegate interface {
         Request(mc *MessageConnection, message interface{}) (interface{}, error)
         Notification(mc *MessageConnection, message interface{})
-        RequestReceiveStream(vmc *MessageConnection, message interface{}, channel chan []byte) error
-        RequestSendStream(mc *MessageConnection, message interface{}, channel chan []byte) error
+        OpenReadChannel(vmc *MessageConnection, message interface{}, channel chan []byte) error
+        OpenWriteChannel(mc *MessageConnection, message interface{}, channel chan []byte) error
         Disconnect(mc *MessageConnection)
 }
 
@@ -103,11 +103,11 @@ func (n *Node) initMessageConnection(c *MessageConnection) {
 		        return n.handlerDelegate.Request(c, message)
 	        }
 	}
-	c.onRequestReceiveStreamMessage = func(message interface{}, channel chan []byte) error {
-		return n.handlerDelegate.RequestReceiveStream(c, message, channel)
+	c.onOpenReadChannelMessage = func(message interface{}, channel chan []byte) error {
+		return n.handlerDelegate.OpenReadChannel(c, message, channel)
 	}
-	c.onRequestSendStreamMessage = func(message interface{}, channel chan []byte) error {
-		return n.handlerDelegate.RequestSendStream(c, message, channel)
+	c.onOpenWriteChannelMessage = func(message interface{}, channel chan []byte) error {
+		return n.handlerDelegate.OpenWriteChannel(c, message, channel)
 	}
 	c.onDisconnect = func() {
 		if c.info.Guid != "" {
