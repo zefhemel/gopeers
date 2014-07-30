@@ -8,10 +8,6 @@ import (
 	"os"
 )
 
-const (
-        BUFFER_SIZE = 128 * 1024
-)
-
 type NodeInfo struct {
 	Guid        string
 	Ip          string
@@ -25,11 +21,28 @@ type PeerMessage struct {
 	err     error
 }
 
+/*
+The handler interface that an application should implement, handling
+incoming messages of various kinds.
+*/
 type NodeHandlerDelegate interface {
+        // A RPC-like request has been received, respond with either an error
+        // or return a new message. Both incoming and outgoing messages must be registered
+        // protocol messages.
         Request(mc *MessageConnection, message interface{}) (interface{}, error)
+
+        // A notification message was received.
         Notification(mc *MessageConnection, message interface{})
+
+        // A request to open a read channel was received. The channel that's
+        // passed in should be written to from this end (so that the receiver reads).
         OpenReadChannel(vmc *MessageConnection, message interface{}, channel chan []byte) error
+
+        // A request to open a write channel was received. The channel that's
+        // passed in should be read from (the other end will be writing to it).
         OpenWriteChannel(mc *MessageConnection, message interface{}, channel chan []byte) error
+
+        // A peer has disconnected
         Disconnect(mc *MessageConnection)
 }
 
@@ -45,6 +58,8 @@ type helloResponseMessage struct {
         Nodes []NodeInfo
 }
 
+// The representation of a peer in the network. You usually instantiate
+// one of these and connect it to another peer somewhere in the network.
 type Node struct {
 	guid        string
 	listenIp    string
@@ -75,6 +90,21 @@ func (n *Node) initNode(listenIp string) {
         n.connections = make(map[string]*MessageConnection)
         n.initializedChan = make(chan bool, 1)
         n.log = log.New(os.Stdout, fmt.Sprintf("[%s] ", n.guid), log.Lshortfile)
+}
+
+// Returns the (automatically generated) GUID for this node
+func (n *Node) Guid() string {
+        return n.guid
+}
+
+// Returns a map of all currently open connections to other peers
+func (n *Node) Connections() map[string]*MessageConnection {
+        return n.connections
+}
+
+// Returns a connection given a particular GUId, or nil if not connected
+func (n *Node) Connection(guid string) *MessageConnection {
+        return n.connections[guid]
 }
 
 
@@ -129,6 +159,10 @@ func (n *Node) handleMessageConnection(conn net.Conn) {
 	c.Loop()
 }
 
+// Broadcast a request (RPC) to all connected peers and return responses
+// as a (buffered) channel of PeerMessages
+// Note that if you're only interested in one response, just get one and
+// ignore the rest.
 func (n *Node) BroadcastRequest(message interface{}) chan PeerMessage {
 	channel := make(chan PeerMessage, len(n.connections))
 	waitingForResponses := 0
@@ -222,22 +256,23 @@ func (n *Node) connect(info NodeInfo) error {
 	return nil
 }
 
-func (n *Node) Connect(ip string, port int) error {
+// Boot up the node in the background, returns as soon as the node
+// is listening for incoming connections.
+func (n *Node) Start() error {
 	go n.mainLoop()
 	// Wait until fully initialized
 	<-n.initializedChan
-	err := n.connect(NodeInfo{Ip: "127.0.0.1", Port: n.listenPort})
-	if err != nil {
-		n.log.Println("Couldn't connect to myself")
-		return err
-	}
-	if ip != "" {
-		return n.connect(NodeInfo{Ip: ip, Port: port})
-	} else {
-		return nil
-	}
+	return n.connect(NodeInfo{Ip: "127.0.0.1", Port: n.listenPort})
 }
 
+// Connect to another node in the network, which in turn will result in
+// further connects to other nodes that that node knows about.
+func (n *Node) Connect(ip string, port int) error {
+	return n.connect(NodeInfo{Ip: ip, Port: port})
+}
+
+// Shut down the node, stop listening to incomming connections and
+// close all existing connections to other nodes.
 func (n *Node) Close() error {
 	n.closing = true
 	n.listener.Close()

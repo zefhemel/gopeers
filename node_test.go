@@ -115,12 +115,15 @@ func (td *testDelegate) Disconnect(mc *MessageConnection) {
 
 func TestConnect(t *testing.T) {
 	node1 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
-	node1.Connect("", 0)
+	node1.Start()
 	node2 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
+	node2.Start()
 	node2.Connect("127.0.0.1", node1.listenPort)
 	node3 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
+	node3.Start()
 	node3.Connect("127.0.0.1", node1.listenPort)
 	node4 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
+	node4.Start()
 	node4.Connect("127.0.0.1", node3.listenPort)
 
 	countConnections := func(n *Node) int {
@@ -147,12 +150,15 @@ func TestConnect(t *testing.T) {
 
 func TestConnectDisconnect(t *testing.T) {
 	node1 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
-	node1.Connect("", 0)
+	node1.Start()
 	node2 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
+	node2.Start()
 	node2.Connect("127.0.0.1", node1.listenPort)
 	node3 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
+	node3.Start()
 	node3.Connect("127.0.0.1", node1.listenPort)
 	node4 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
+	node4.Start()
 	node4.Connect("127.0.0.1", node1.listenPort)
 	fmt.Println("Now shutting down node 3 and 1", node3.guid)
 	node3.Close()
@@ -180,10 +186,12 @@ func TestConnectDisconnect(t *testing.T) {
 
 func TestKeyValue(t *testing.T) {
 	node1 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
-	node1.Connect("", 0)
+	node1.Start()
 	node2 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
+	node2.Start()
 	node2.Connect("127.0.0.1", node1.listenPort)
 	node3 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
+	node3.Start()
 	node3.Connect("127.0.0.1", node1.listenPort)
 
 	setChannel := node1.BroadcastRequest(setKeyMessage{
@@ -213,8 +221,9 @@ func TestKeyValue(t *testing.T) {
 
 func TestReceiveStream(t *testing.T) {
 	node1 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
-	node1.Connect("", 0)
+	node1.Start()
 	node2 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
+	node2.Start()
 	node2.Connect("127.0.0.1", node1.listenPort)
 	channel, err := node1.connections[node2.guid].OpenReadChannelMessage(sendSomeBytes{})
 	if err != nil {
@@ -228,8 +237,9 @@ func TestReceiveStream(t *testing.T) {
 
 func TestSendStream(t *testing.T) {
 	node1 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
-        node1.Connect("", 0)
+        node1.Start()
         node2 := NewNode("127.0.0.1", newTestDelegate(t), testMessages)
+        node2.Start()
         node2.Connect("127.0.0.1", node1.listenPort)
 	channel, doneChannel, err := node1.connections[node2.guid].OpenWriteChannelMessage(receiveSomeBytes{})
 	if err != nil {
