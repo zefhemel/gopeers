@@ -65,6 +65,7 @@ type FrameConnection struct {
 func NewFrameConnection(conn net.Conn) *FrameConnection {
 	c := &FrameConnection{}
 	c.initFrameConnection(conn)
+
 	return c
 }
 
@@ -240,11 +241,17 @@ func (c *FrameConnection) readLoop() {
 		case openReadChannelFrame:
 			pr := pendingRequest{true, make(chan []byte), nil}
 			c.requests[reqId] = pr
+			if c.reqId <= reqId {
+			        c.reqId = reqId + 1
+			}
 			go c.OnOpenReadChannel(buffer, pr.channel)
 			go c.streamResponse(reqId, pr.channel)
 		case openWriteChannelFrame:
 			pr := pendingRequest{true, make(chan []byte), nil}
 			c.requests[reqId] = pr
+			if c.reqId <= reqId {
+                                c.reqId = reqId + 1
+                        }
 			go c.OnOpenWriteChannel(buffer, pr.channel)
 		case responseFrame, channelDataFrame:
 			if pr, ok := c.requests[reqId]; ok {
@@ -268,7 +275,9 @@ func (c *FrameConnection) readLoop() {
 			}
 		case channelClosedFrame:
 			if pr, ok := c.requests[reqId]; ok {
-			        pr.doneChannel <- true
+			        if pr.doneChannel != nil {
+			                pr.doneChannel <- true
+			        }
 				delete(c.requests, reqId)
 			} else {
 				fmt.Println("Response to non-existent request id", reqId)

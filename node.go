@@ -97,9 +97,15 @@ func (n *Node) Guid() string {
         return n.guid
 }
 
-// Returns a map of all currently open connections to other peers
-func (n *Node) Connections() map[string]*MessageConnection {
-        return n.connections
+// Returns a list of all currently open connections to other peers
+func (n *Node) Connections() []*MessageConnection {
+        conns := make([]*MessageConnection, len(n.connections))
+        i := 0
+        for _, conn := range n.connections {
+                conns[i] = conn
+                i++
+        }
+        return conns
 }
 
 // Returns a connection given a particular GUId, or nil if not connected
