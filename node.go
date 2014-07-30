@@ -35,12 +35,12 @@ type NodeHandlerDelegate interface {
 
 // Built in protocol messages
 
-type HelloMessage struct {
+type helloMessage struct {
         Guid string
         Port int
 }
 
-type HelloResponseMessage struct {
+type helloResponseMessage struct {
         Guid string
         Nodes []NodeInfo
 }
@@ -65,7 +65,7 @@ func NewNode(listenIp string, handlerDelegate NodeHandlerDelegate, protocolMessa
         node := &Node {}
         node.initNode(listenIp)
         node.handlerDelegate = handlerDelegate
-        node.protocolMessages = append([]interface{} { HelloMessage{}, HelloResponseMessage{} }, protocolMessages...)
+        node.protocolMessages = append([]interface{} { helloMessage{}, helloResponseMessage{} }, protocolMessages...)
 	return node
 }
 
@@ -85,7 +85,7 @@ func (n *Node) initMessageConnection(c *MessageConnection) {
 	c.onRequestMessage = func(message interface{}) (interface{}, error) {
 	        // Check if it's a built-in message I should respond to
 	        switch m := message.(type) {
-                case *HelloMessage:
+                case *helloMessage:
                         nodes := make([]NodeInfo, len(n.connections))
                         idx := 0
                         for _, conn := range n.connections {
@@ -95,7 +95,7 @@ func (n *Node) initMessageConnection(c *MessageConnection) {
                         c.info.Port = m.Port
                         n.connections[m.Guid] = c
                         c.info.Guid = m.Guid
-                        return HelloResponseMessage {
+                        return helloResponseMessage {
                             Guid:  n.guid,
                             Nodes: nodes,
                         }, nil
@@ -192,7 +192,7 @@ func (n *Node) connect(info NodeInfo) error {
 	c.info = info
 	n.initMessageConnection(c)
 	go c.Loop()
-	resp, err := c.RequestMessage(HelloMessage{
+	resp, err := c.RequestMessage(helloMessage{
 		Guid: n.guid,
 		Port: n.listenPort,
 	})
@@ -200,7 +200,7 @@ func (n *Node) connect(info NodeInfo) error {
 		return err
 	}
 	switch r := resp.(type) {
-        case *HelloResponseMessage:
+        case *helloResponseMessage:
         	guid := r.Guid
         	n.connections[guid] = c
         	c.info.Guid = guid

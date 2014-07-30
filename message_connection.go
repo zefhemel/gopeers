@@ -9,9 +9,9 @@ import (
 )
 
 
-type MessageType uint16
+type messageKind uint16
 
-const ErrorMessageType = 65535
+const errorMessageKind = 65535
 
 // Extends FrameConnection with a Message layer + error handling
 
@@ -21,7 +21,7 @@ type MessageConnection struct {
         info    NodeInfo
 
         protocolMessages []reflect.Type
-        inverseProtocolMessages map[reflect.Type]MessageType
+        inverseProtocolMessages map[reflect.Type]messageKind
 
         // handlers
         onNotificationMessage  func(interface{})
@@ -30,8 +30,8 @@ type MessageConnection struct {
         onOpenWriteChannelMessage func(interface{}, chan []byte) error
 }
 
-// messageType = ErrorMessageType
-type ErrorMessage struct {
+// messageKind = ErrormessageKind
+type errorMessage struct {
         Message string
 }
 
@@ -55,7 +55,7 @@ func NewMessageConnection(conn net.Conn, protocolMessages []interface{}) *Messag
                 }
                 result, err := mc.onRequestMessage(val)
                 if err != nil {
-                        result = ErrorMessage { err.Error() }
+                        result = errorMessage { err.Error() }
                 }
                 resultBytes, err := mc.encodeMessage(result)
                 if err != nil {
@@ -93,25 +93,25 @@ func NewMessageConnection(conn net.Conn, protocolMessages []interface{}) *Messag
 
 func (mc *MessageConnection) setProtocolMessages(messages []interface{}) {
         mc.protocolMessages = make([]reflect.Type, len(messages))
-        mc.inverseProtocolMessages = make(map[reflect.Type]MessageType)
+        mc.inverseProtocolMessages = make(map[reflect.Type]messageKind)
         for i, m := range messages {
                 t := reflect.TypeOf(m)
                 mc.protocolMessages[i] = t
-                mc.inverseProtocolMessages[t] = MessageType(i)
+                mc.inverseProtocolMessages[t] = messageKind(i)
         }
 }
 
 func (mc *MessageConnection) encodeMessage(message interface{}) ([]byte, error) {
-        var messageType MessageType
+        var messageKind messageKind
         switch message.(type) {
-        case ErrorMessage:
-                messageType = ErrorMessageType
-        case *ErrorMessage:
-                messageType = ErrorMessageType
+        case errorMessage:
+                messageKind = errorMessageKind
+        case *errorMessage:
+                messageKind = errorMessageKind
         default:
                 t := reflect.TypeOf(message)
                 var ok bool
-                messageType, ok = mc.inverseProtocolMessages[t]
+                messageKind, ok = mc.inverseProtocolMessages[t]
                 if !ok {
                         return nil, errors.New(fmt.Sprintf("Not a known message type: %s", t))
                 }
@@ -120,23 +120,23 @@ func (mc *MessageConnection) encodeMessage(message interface{}) ([]byte, error) 
         if err != nil {
                 return nil, err
         }
-        dataWithMessageType := make([]byte, len(data)+2)
-        writeMesssageTypeToBytes(messageType, dataWithMessageType)
-        copy(dataWithMessageType[2:], data)
-        return dataWithMessageType, nil
+        dataWithmessageKind := make([]byte, len(data)+2)
+        writeMessageKindToBytes(messageKind, dataWithmessageKind)
+        copy(dataWithmessageKind[2:], data)
+        return dataWithmessageKind, nil
 }
 
 func (mc *MessageConnection) decodeMessage(data []byte) (interface{}, error) {
-        messageType := readMessageTypeFromBytes(data)
-        if messageType == ErrorMessageType {
-                value := ErrorMessage{}
+        kind := readMessageKindFromBytes(data)
+        if kind == errorMessageKind {
+                value := errorMessage{}
                 err := json.Unmarshal(data[2:], &value)
                 if err != nil {
                         return nil, err
                 }
                 return nil, errors.New(value.Message)
-        } else if messageType < MessageType(len(mc.protocolMessages)) {
-                value := reflect.New(mc.protocolMessages[messageType]).Interface()
+        } else if kind < messageKind(len(mc.protocolMessages)) {
+                value := reflect.New(mc.protocolMessages[kind]).Interface()
                 err := json.Unmarshal(data[2:], value)
                 return value, err
         } else {
@@ -181,11 +181,11 @@ func (mc *MessageConnection) OpenWriteChannelMessage(message interface{}) (chan 
         return mc.OpenWriteChannel(data)
 }
 
-func writeMesssageTypeToBytes(t MessageType, data []byte) {
+func writeMessageKindToBytes(t messageKind, data []byte) {
     data[0] = byte(t / 256)
     data[1] = byte(t % 256)
 }
 
-func readMessageTypeFromBytes(data []byte) MessageType {
-    return MessageType(data[0]) * 256 + MessageType(data[1])
+func readMessageKindFromBytes(data []byte) messageKind {
+    return messageKind(data[0]) * 256 + messageKind(data[1])
 }
